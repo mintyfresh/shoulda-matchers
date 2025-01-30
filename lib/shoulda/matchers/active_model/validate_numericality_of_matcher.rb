@@ -360,6 +360,7 @@ module Shoulda
       class ValidateNumericalityOfMatcher < ValidationMatcher
         NUMERIC_NAME = 'number'.freeze
         DEFAULT_DIFF_TO_COMPARE = 1
+        NUMERIC_ATTRIBUTE_TYPES = [:integer, :float, :decimal].freeze
 
         attr_reader :diff_to_compare
 
@@ -483,8 +484,13 @@ module Shoulda
         end
 
         def given_numeric_column?
-          attribute_is_active_record_column? &&
-            [:integer, :float, :decimal].include?(column_type)
+          # NOTE: Checking against both `columns_hash` and `attribute_types` is strictly speaking redundant,
+          #       since all columns are also included in the attribute types hash for ActiveRecord models.
+          #       However, this was existing behavior and preserved to avoid unexpected breakages.
+          (attribute_is_active_record_column? &&
+            NUMERIC_ATTRIBUTE_TYPES.include?(column_type)) ||
+            (attribute_is_active_model_attribute? &&
+              NUMERIC_ATTRIBUTE_TYPES.include?(attribute_type))
         end
 
         private
@@ -500,13 +506,29 @@ module Shoulda
           columns_hash.key?(attribute.to_s)
         end
 
+        def attribute_is_active_model_attribute?
+          attribute_types.key?(attribute.to_s)
+        end
+
         def column_type
           columns_hash[attribute.to_s].type
+        end
+
+        def attribute_type
+          attribute_types[attribute.to_s].type
         end
 
         def columns_hash
           if subject.class.respond_to?(:columns_hash)
             subject.class.columns_hash
+          else
+            {}
+          end
+        end
+
+        def attribute_types
+          if subject.class.respond_to?(:attribute_types)
+            subject.class.attribute_types
           else
             {}
           end
